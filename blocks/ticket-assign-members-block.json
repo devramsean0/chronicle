@@ -1,0 +1,52 @@
+{
+	"type": "modal",
+    "callback_id": "ticket-assign-members-modal",
+	"submit": {
+		"type": "plain_text",
+		"text": "Assign",
+		"emoji": true
+	},
+	"close": {
+		"type": "plain_text",
+		"text": "Cancel",
+		"emoji": true
+	},
+	"title": {
+		"type": "plain_text",
+		"text": "Assign someone to ticket",
+		"emoji": true
+	},
+	"private_metadata": "",
+	"blocks": [
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "Who are you assigning?"
+			}
+		},
+		{
+			"type": "divider"
+		},
+		{
+			"type": "input",
+            "block_id": "assignees-select-block",
+			"element": {
+				"type": "multi_users_select",
+				"placeholder": {
+					"type": "plain_text",
+					"text": "Select users",
+					"emoji": true
+				},
+				"action_id": "assignees-select",
+				"initial_users": []
+			},
+			"optional": true,
+			"label": {
+				"type": "plain_text",
+				"text": "Assignees (up to 2!)",
+				"emoji": true
+			}
+		}
+	]
+}

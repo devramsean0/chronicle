@@ -1,0 +1,35 @@
+[
+    {
+        "type": "section",
+        "text": {
+            "type": "plain_text",
+            "text": "Hey! You can manage the ticket here :)",
+            "emoji": true
+        }
+    },
+    {
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Assign someone",
+                    "emoji": true
+                },
+                "value": "ticket-assign-someone",
+                "action_id": "ticket-assign-manager"
+            },
+            {
+                "type": "button",
+                "text": {
+                    "type": "plain_text",
+                    "text": "Mark Ticket as closed",
+                    "emoji": true
+                },
+                "value": "ticket-mark-closed",
+                "action_id": "ticket-mark-closed"
+            }
+        ]
+    }
+]
