@@ -1,16 +1,15 @@
 import 'dotenv/config';
 import { drizzle } from "drizzle-orm/node-postgres";
-
 import { App } from "@slack/bolt";
 import type { GenericMessageEvent } from "@slack/types";
-import { ticketsTable } from './schema';
+import { ticketsTable } from './lib/schema';
 import { buildMessageLink } from './lib/linkBuilder';
+import { eq } from 'drizzle-orm';
+import { userDiffer } from './lib/userDiffer';
 
 // Blocks
 import TicketManagementMessageBlock from './blocks/ticket-management-message.json'
 import TicketAssignMembersBlock from './blocks/ticket-assign-members-block.json';
-import { eq } from 'drizzle-orm';
-import { userDiffer } from './lib/userDiffer';
 
 // Connect to DB
 const db = drizzle(process.env.DATABASE_URL!);
@@ -23,6 +22,8 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN // add this
 });
 
+global.app = app;
+global.db = db;
 
 
 app.message(async ({ message, say, client, logger }) => {
@@ -138,6 +139,50 @@ app.view({ callback_id: "ticket-assign-members-modal", type: "view_submission"},
       text: `Removed <@${user}> from ${db_ticket[0]?.id}`,
     })
   });
+});
+
+app.action("ticket-mark-closed", async ({ body, ack, client, logger }) => {
+  await ack();
+
+  if (body.type != "block_actions") return;
+
+  const ticketId = body.message!.blocks![1]!.elements[0]!.value;
+
+  const db_ticket = await db.select().from(ticketsTable).where(eq(ticketsTable.id, ticketId)).limit(1);
+
+  if (!db_ticket || db_ticket.length === 0) {
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: 'Ticket not found.',
+    });
+    return;
+  }
+
+  if (db_ticket[0]!.status === 1) {
+    await client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: 'This ticket is already closed.',
+    });
+    return;
+  }
+
+  await db.update(ticketsTable).set({
+    status: 1 // Closed
+  }).where(eq(ticketsTable.id, ticketId));
+
+  await client.chat.postMessage({
+    channel: process.env.LOG_CHANNEL_ID!,
+    unfurl_links: true,
+    text: `Marked ticket ${ticketId} as closed.`,
+  })
+
+  await client.chat.postMessage({
+    channel: body.channel!.id,
+    text: `Ticket ${ticketId} has been marked as closed.`,
+    thread_ts: body.message!.ts,
+  })
 });
 
 (async () => {

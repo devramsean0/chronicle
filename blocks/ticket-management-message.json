@@ -14,7 +14,7 @@
                 "type": "button",
                 "text": {
                     "type": "plain_text",
-                    "text": "Assign someone",
+                    "text": "Manage assignees",
                     "emoji": true
                 },
                 "value": "ticket-assign-someone",
