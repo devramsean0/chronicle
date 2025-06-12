@@ -1,0 +1,24 @@
+{
+	"type": "home",
+	"blocks": [
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "403 - Unauthorised",
+				"emoji": true
+			}
+		},
+		{
+			"type": "divider"
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "plain_text",
+				"text": "Chronicle/1.0 (Slack)",
+				"emoji": true
+			}
+		}
+	]
+}

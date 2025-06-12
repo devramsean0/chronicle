@@ -2,14 +2,17 @@ import 'dotenv/config';
 import { drizzle } from "drizzle-orm/node-postgres";
 import { App } from "@slack/bolt";
 import type { GenericMessageEvent } from "@slack/types";
-import { ticketsTable } from './lib/schema';
+import { assigneesTable, ticketsTable } from './lib/schema';
 import { buildMessageLink } from './lib/linkBuilder';
 import { eq } from 'drizzle-orm';
 import { userDiffer } from './lib/userDiffer';
+import type { PingCache } from './types/PingCache';
 
 // Blocks
 import TicketManagementMessageBlock from './blocks/ticket-management-message.json'
 import TicketAssignMembersBlock from './blocks/ticket-assign-members-block.json';
+import AppHomeBlock from './blocks/app-home.json';
+import AppHomeBlockedBlock from './blocks/app-home-blocked.json';
 
 // Connect to DB
 const db = drizzle(process.env.DATABASE_URL!);
@@ -184,6 +187,62 @@ app.action("ticket-mark-closed", async ({ body, ack, client, logger }) => {
     thread_ts: body.message!.ts,
   })
 });
+
+let pingCache: PingCache | null = null;
+
+app.event("app_home_opened", async ({ event, client, logger }) => {
+  try {
+    // We want to limit this to FD members only, Done via the FD ping group. We also want to cache this for like a day.\
+    if (!pingCache || (Date.now() - pingCache.fetchedOn) > 24 * 60 * 60 * 1000) {
+      const pingGroup = await client.usergroups.users.list({
+        usergroup: process.env.FD_PING_GROUP_ID!,
+      });
+
+      pingCache = {
+        members: pingGroup.users || [],
+        fetchedOn: Date.now(),
+      };
+    }
+
+    const userId = event.user;
+    if (!pingCache.members.includes(userId)) {
+      await client.views.publish({
+        user_id: userId,
+        // @ts-expect-error
+        view: AppHomeBlockedBlock
+      })
+      return;
+    }
+
+    const localAppHomeBlock = AppHomeBlock;
+
+    const assignee_data = await db.insert(assigneesTable).values({
+      slackId: event.user,
+    }).onConflictDoNothing().returning();
+
+    localAppHomeBlock.private_metadata = event.user;
+
+    if (assignee_data[0]!.active) {
+      localAppHomeBlock.blocks[1]!.text!.text = "You are currently in the automatic assignee pool.";
+    } else {
+      localAppHomeBlock.blocks[1]!.text!.text = "You are currently not in the automatic assignee pool. Click the button below to join.";
+    }
+    await client.views.publish({
+      user_id: event.user,
+      // @ts-expect-error
+      view: AppHomeBlock
+    });
+  } catch (error) {
+    logger.error('Error opening app home:', error);
+    await client.chat.postEphemeral({
+      channel: event.user,
+      user: event.user,
+      text: 'There was an error opening the app home. Please try again later.',
+    });
+  }
+});
+
+
 
 (async () => {
   // Start your app

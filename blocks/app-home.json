@@ -1,0 +1,37 @@
+{
+	"type": "home",
+	"private_metadata": "",
+	"blocks": [
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "Auto Assignment Status",
+				"emoji": true
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "plain_text",
+				"text": "I do not know whether you are assignable or not :shrug:",
+				"emoji": true
+			}
+		},
+		{
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "Toggle your status",
+						"emoji": true
+					},
+					"value": "click_me_123",
+					"action_id": "auto-assignment-toggle"
+				}
+			]
+		}
+	]
+}

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm"
-import {integer, pgTable, uuid, varchar } from "drizzle-orm/pg-core"
+import {boolean, integer, pgTable, uuid, varchar } from "drizzle-orm/pg-core"
 
 export const ticketsTable = pgTable("tickets", {
     id: uuid().primaryKey().defaultRandom(),
@@ -7,3 +7,9 @@ export const ticketsTable = pgTable("tickets", {
     assignedTo: varchar("assigned_to", { length: 10}).array(2).notNull().default(sql`ARRAY[]::text[]`),
     status: integer("status").notNull().default(0),
 })
+
+export const assigneesTable = pgTable("assignees", {
+    id: uuid().primaryKey().defaultRandom(),
+    slackId: varchar("slack_id", { length: 64 }).notNull(),
+    active: boolean("active").notNull().default(true),
+});
