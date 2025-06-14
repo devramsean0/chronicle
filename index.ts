@@ -4,7 +4,7 @@ import { App } from "@slack/bolt";
 import type { GenericMessageEvent } from "@slack/types";
 import { assigneesTable, ticketsTable } from './lib/schema';
 import { buildMessageLink } from './lib/linkBuilder';
-import { eq, sql } from 'drizzle-orm';
+import { ConsoleLogWriter, eq, sql } from 'drizzle-orm';
 import { userDiffer } from './lib/userDiffer';
 import type { PingCache } from './types/PingCache';
 import { Queue, Worker } from 'bullmq';
@@ -20,6 +20,10 @@ import TicketManagementMessageBlock from './blocks/ticket-management-message.jso
 import TicketAssignMembersBlock from './blocks/ticket-assign-members-block.json';
 import AppHomeBlock from './blocks/app-home.json';
 import AppHomeBlockedBlock from './blocks/app-home-blocked.json';
+import { container } from '@sapphire/pieces';
+import { EventStore } from './lib/structures/eventStore';
+import { ActionStore } from './lib/structures/actionStore';
+import { ViewStore } from './lib/structures/viewStore';
 
 // Connect to DB
 const db = drizzle(process.env.DATABASE_URL!);
@@ -93,6 +97,15 @@ autoAssignWorker.on('failed', (job, err) => {
   app.logger.error(`Job ${job!.id} failed with error: ${err.message}`);
 });
 
+// Register stores
+console.log(process.cwd());
+container.stores.registerPath(process.cwd())
+container.stores.register(new EventStore());
+container.stores.register(new ActionStore());
+container.stores.register(new ViewStore());
+await Promise.all([...container.stores.values()].map((store) => store.loadAll()));
+await container.stores.load();
+container.stores.get('events').registerPath(process.cwd() + '/events');
 app.message(async ({ message, say, client, logger }) => {
   if (message.subtype) {
     return;

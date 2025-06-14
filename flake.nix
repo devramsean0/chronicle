@@ -23,6 +23,7 @@
             gcc
             gnumake
             yarn
+            scc
           ];
 
           shellHook = ''

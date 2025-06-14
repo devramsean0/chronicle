@@ -19,6 +19,7 @@
     "db:migrate": "bun run drizzle-kit migrate"
   },
   "dependencies": {
+    "@sapphire/pieces": "^4.4.1",
     "@slack/bolt": "^4.4.0",
     "airtable-ts": "^1.6.0",
     "bullmq": "^5.53.3",
