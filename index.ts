@@ -9,6 +9,11 @@ import { userDiffer } from './lib/userDiffer';
 import type { PingCache } from './types/PingCache';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
+import { AirtableTs } from 'airtable-ts';
+
+// Airtable types
+import { ticketsTable as airtableTicketsTable }  from './generated/airtable/viwIGANXxBqjC6v0L';
+import { TicketAssigneestable } from './generated/airtable/viw9adRITL0iJdI0M';
 
 // Blocks
 import TicketManagementMessageBlock from './blocks/ticket-management-message.json'
@@ -30,6 +35,13 @@ const app = new App({
 global.app = app;
 global.db = db;
 
+
+// Connect to Airtable
+const airtable = new AirtableTs({
+  apiKey: process.env.AIRTABLE_API_KEY!,
+});
+
+global.airtable = airtable;
 
 // Auto assignment queue
 const redisConnection = new IORedis(process.env.REDIS_URL!, {
@@ -60,7 +72,9 @@ const autoAssignWorker = new Worker('auto-assign', async (job) => {
       assignedTo: sql`array[${randomAssignee?.slackId!}]`
     })
     .where(eq(ticketsTable.id, ticketId));
-  
+
+  await airtable.update(airtableTicketsTable, { id: db_ticket[0]!.airtableId, assignedTo: JSON.stringify([randomAssignee?.slackId!]) });
+
   app.logger.info(`Ticket ${ticketId} auto assigned to ${randomAssignee?.slackId}`);
   await app.client.chat.postMessage({
     channel: process.env.LOG_CHANNEL_ID!,
@@ -96,9 +110,22 @@ app.message(async ({ message, say, client, logger }) => {
     text: msg.text,
     timestamp: msg.ts
   });
+
+  const airtable_ticket = await airtable.insert(airtableTicketsTable, {
+    originalMessageTS: msg.ts,
+    assignedTo: JSON.stringify([]),
+    status: 0
+  })
+
   const db_ticket = await db.insert(ticketsTable).values({
     originalMessageTS: msg.ts,
+    airtableId: airtable_ticket.id,
   }).returning();
+
+  airtable.update(airtableTicketsTable, {
+    id: airtable_ticket.id,
+    dbId: db_ticket[0]!.id,
+  })
 
   // Send a message to log channel
   client.chat.postMessage({
@@ -180,7 +207,11 @@ app.view({ callback_id: "ticket-assign-members-modal", type: "view_submission"},
     .set({
       assignedTo: selectedUsers.selected_users })
     .where(eq(ticketsTable.id, view.private_metadata))
-
+  
+  await airtable.update(airtableTicketsTable, {
+    id: db_ticket[0]!.airtableId,
+    assignedTo: JSON.stringify(selectedUsers.selected_users),
+  })
   const user_difference = userDiffer(db_ticket[0]?.assignedTo ?? [], selectedUsers.selected_users ?? []);
 
   user_difference.newUsers.forEach(async (user) => {
@@ -230,6 +261,11 @@ app.action("ticket-mark-closed", async ({ body, ack, client, logger }) => {
     status: 1 // Closed
   }).where(eq(ticketsTable.id, ticketId));
 
+  await airtable.update(airtableTicketsTable, {
+    id: db_ticket[0]!.airtableId,
+    status: 1 // Closed
+  });
+
   await client.chat.postMessage({
     channel: process.env.LOG_CHANNEL_ID!,
     unfurl_links: true,
@@ -271,9 +307,19 @@ app.event("app_home_opened", async ({ event, client, logger }) => {
 
     const localAppHomeBlock = AppHomeBlock;
 
+    const airtable_assignee = await airtable.insert(TicketAssigneestable, {
+      slackId: event.user
+    })
     const assignee_data = await db.insert(assigneesTable).values({
       slackId: event.user,
+      airtableId: airtable_assignee.id,
+      active: true,
     }).onConflictDoNothing().returning();
+
+    await airtable.update(TicketAssigneestable, {
+      id: airtable_assignee.id,
+      dbId: assignee_data[0]!.id,
+    });
 
     localAppHomeBlock.private_metadata = event.user;
 
@@ -309,13 +355,27 @@ app.event("subteam_updated", async ({ event, client, logger }) => {
     const diff = userDiffer(current_assignee_slack_ids, new_possible_assignees);
 
     if (diff.newUsers.length > 0) {
-      await db.insert(assigneesTable).values(
-        diff.newUsers.map(user => ({ slackId: user, active: true }))
-      ).onConflictDoUpdate({
+      for (const user of diff.newUsers) {
+      const airtableAssignee = await airtable.insert(TicketAssigneestable, {
+        slackId: user,
+      });
+
+      const dbAssignee = await db.insert(assigneesTable).values({
+        slackId: user,
+        airtableId: airtableAssignee.id,
+        active: true,
+      }).onConflictDoUpdate({
         target: [assigneesTable.slackId],
-        set: { active: true }
+        set: { active: true },
       }).returning();
-      logger.info('Assignee Created/Enabled:', diff.newUsers);
+
+      await airtable.update(TicketAssigneestable, {
+        id: airtableAssignee.id,
+        dbId: dbAssignee[0]!.id,
+      });
+
+      logger.info('Assignee Created/Enabled:', user);
+      }
     }
     diff.removedUsers.forEach(async (user) => {
       await db.update(assigneesTable).set({ active: false }).where(eq(assigneesTable.slackId, user));

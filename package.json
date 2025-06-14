@@ -6,14 +6,20 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/pg": "^8.15.4",
+    "airtable-ts-codegen": "^2.1.0",
     "drizzle-kit": "^0.31.1",
     "tsx": "^4.19.4"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
+  "scripts": {
+    "start": "bun run index.ts",
+    "codegen:airtable": "bun run scripts/airtable-codegen.ts"
+  },
   "dependencies": {
     "@slack/bolt": "^4.4.0",
+    "airtable-ts": "^1.6.0",
     "bullmq": "^5.53.3",
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.44.2",
