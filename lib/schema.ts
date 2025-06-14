@@ -10,6 +10,6 @@ export const ticketsTable = pgTable("tickets", {
 
 export const assigneesTable = pgTable("assignees", {
     id: uuid().primaryKey().defaultRandom(),
-    slackId: varchar("slack_id", { length: 64 }).notNull(),
+    slackId: varchar("slack_id", { length: 64 }).notNull().unique(),
     active: boolean("active").notNull().default(true),
 });

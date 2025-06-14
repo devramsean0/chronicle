@@ -242,7 +242,41 @@ app.event("app_home_opened", async ({ event, client, logger }) => {
   }
 });
 
+app.event("subteam_updated", async ({ event, client, logger }) => {
+  try {
+    if (event.subteam.id !== process.env.FD_PING_GROUP_ID) return;
 
+    const current_assignees = await db.select().from(assigneesTable).where(eq(assigneesTable.active, true));
+    const current_assignee_slack_ids = current_assignees.map(a => a.slackId);
+
+    const new_possible_assignees = event.subteam.users || [];
+
+    const diff = userDiffer(current_assignee_slack_ids, new_possible_assignees);
+
+    if (diff.newUsers.length > 0) {
+      await db.insert(assigneesTable).values(
+        diff.newUsers.map(user => ({ slackId: user, active: true }))
+      ).onConflictDoUpdate({
+        target: [assigneesTable.slackId],
+        set: { active: true }
+      }).returning();
+      logger.info('Assignee Created/Enabled:', diff.newUsers);
+    }
+    diff.removedUsers.forEach(async (user) => {
+      await db.update(assigneesTable).set({ active: false }).where(eq(assigneesTable.slackId, user));
+      logger.info('Assignee disabled:', user);
+    })
+  } catch (error) {
+    logger.error('Error handling subteam update:', error);
+    await client.chat.postEphemeral({
+      channel: process.env.LOG_CHANNEL_ID!,
+      user: process.env.LOG_CHANNEL_ID!,
+      text: 'There was an error handling the subteam update. Please check the logs.',
+    });
+  }
+
+  pingCache = null; // Invalidate cache to refresh on next app home open
+});
 
 (async () => {
   // Start your app
