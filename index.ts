@@ -42,23 +42,19 @@ const autoAssignQueue = new Queue('auto-assign', {
 
 const autoAssignWorker = new Worker('auto-assign', async (job) => {
   const ticketId = job.data.ticketId;
-  console.log(ticketId)
   const db_ticket = await db.select().from(ticketsTable).where(eq(ticketsTable.id, ticketId)).limit(1);
-  console.log(db_ticket)
   if (db_ticket[0]!.assignedTo.length > 0) {
     app.logger.info(`Ticket ${ticketId} already has assignees, skipping auto assignment.`);
     return;
   }
 
   const assignees = await db.select().from(assigneesTable).where(eq(assigneesTable.active, true));
-  console.log(assignees)
   if (assignees.length === 0) {
     app.logger.info(`No active assignees found for auto assignment.`);
     return;
   }
 
   const randomAssignee = assignees[Math.floor(Math.random() * assignees.length)];
-  console.log
   await db.update(ticketsTable)
     .set({
       assignedTo: sql`array[${randomAssignee?.slackId!}]`
@@ -124,8 +120,8 @@ app.message(async ({ message, say, client, logger }) => {
   });
 
   await autoAssignQueue.add('auto-assign', { ticketId: db_ticket[0]!.id}, {
-    //delay: 10, //1000 * 60 * 120, // 2 hours
-    //attempts: 3, // Retry up to 3 times
+    delay: 1000 * 60 * 120, // 2 hours
+    attempts: 3, // Retry up to 3 times
   })
 });
 
@@ -176,7 +172,7 @@ app.view({ callback_id: "ticket-assign-members-modal", type: "view_submission"},
     return;
   }
 
-  console.log('Selected users:', selectedUsers.selected_users);
+  app.logger.info('Selected users:', selectedUsers.selected_users);
 
   const db_ticket = await db.select().from(ticketsTable).where(eq(ticketsTable.id, view.private_metadata)).limit(1);
 
