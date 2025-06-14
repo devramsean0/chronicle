@@ -4,9 +4,11 @@ import { App } from "@slack/bolt";
 import type { GenericMessageEvent } from "@slack/types";
 import { assigneesTable, ticketsTable } from './lib/schema';
 import { buildMessageLink } from './lib/linkBuilder';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { userDiffer } from './lib/userDiffer';
 import type { PingCache } from './types/PingCache';
+import { Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
 
 // Blocks
 import TicketManagementMessageBlock from './blocks/ticket-management-message.json'
@@ -28,6 +30,58 @@ const app = new App({
 global.app = app;
 global.db = db;
 
+
+// Auto assignment queue
+const redisConnection = new IORedis(process.env.REDIS_URL!, {
+  maxRetriesPerRequest: null
+});
+
+const autoAssignQueue = new Queue('auto-assign', {
+  connection: redisConnection
+});
+
+const autoAssignWorker = new Worker('auto-assign', async (job) => {
+  const ticketId = job.data.ticketId;
+  console.log(ticketId)
+  const db_ticket = await db.select().from(ticketsTable).where(eq(ticketsTable.id, ticketId)).limit(1);
+  console.log(db_ticket)
+  if (db_ticket[0]!.assignedTo.length > 0) {
+    app.logger.info(`Ticket ${ticketId} already has assignees, skipping auto assignment.`);
+    return;
+  }
+
+  const assignees = await db.select().from(assigneesTable).where(eq(assigneesTable.active, true));
+  console.log(assignees)
+  if (assignees.length === 0) {
+    app.logger.info(`No active assignees found for auto assignment.`);
+    return;
+  }
+
+  const randomAssignee = assignees[Math.floor(Math.random() * assignees.length)];
+  console.log
+  await db.update(ticketsTable)
+    .set({
+      assignedTo: sql`array[${randomAssignee?.slackId!}]`
+    })
+    .where(eq(ticketsTable.id, ticketId));
+  
+  app.logger.info(`Ticket ${ticketId} auto assigned to ${randomAssignee?.slackId}`);
+  await app.client.chat.postMessage({
+    channel: process.env.LOG_CHANNEL_ID!,
+    unfurl_links: true,
+    text: `Ticket ${ticketId} has been auto assigned to <@${randomAssignee?.slackId}>.`,
+  });
+}, {
+  connection: redisConnection,
+  autorun: true
+})
+
+autoAssignWorker.on('completed', (job) => {
+  app.logger.info(`Job ${job.id} completed successfully.`);
+});
+autoAssignWorker.on('failed', (job, err) => {
+  app.logger.error(`Job ${job!.id} failed with error: ${err.message}`);
+});
 
 app.message(async ({ message, say, client, logger }) => {
   if (message.subtype) {
@@ -67,6 +121,11 @@ app.message(async ({ message, say, client, logger }) => {
     //text: `You can manage this ticket by using the buttons here :)`,
     thread_ts: msg.ts,
     blocks: localTicketManagementMessageBlock!,
+  });
+
+  await autoAssignQueue.add('auto-assign', { ticketId: db_ticket[0]!.id}, {
+    //delay: 10, //1000 * 60 * 120, // 2 hours
+    //attempts: 3, // Retry up to 3 times
   })
 });
 
