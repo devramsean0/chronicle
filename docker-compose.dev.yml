@@ -15,13 +15,5 @@ services:
     restart: always
     ports:
       - "6379:6379"
-  bot:
-    build: .
-    restart: always
-    env_file:
-      - .env
-    depends_on:
-      - db
-      - redis
 volumes:
   db-data:

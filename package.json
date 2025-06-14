@@ -15,7 +15,8 @@
   },
   "scripts": {
     "start": "bun run index.ts",
-    "codegen:airtable": "bun run scripts/airtable-codegen.ts"
+    "codegen:airtable": "bun run scripts/airtable-codegen.ts",
+    "db:migrate": "bun run drizzle-kit migrate"
   },
   "dependencies": {
     "@slack/bolt": "^4.4.0",
